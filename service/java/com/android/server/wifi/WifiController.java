@@ -1180,8 +1180,10 @@ public class WifiController extends StateMachine {
 
         @Override
         public void enter() {
-            mWifiStateMachine.setSupplicantRunning(true);
+            // need to set the mode before starting supplicant because WSM will assume we are going
+            // in to client mode
             mWifiStateMachine.setOperationalMode(WifiStateMachine.SCAN_ONLY_WITH_WIFI_OFF_MODE);
+            mWifiStateMachine.setSupplicantRunning(true);
             mWifiStateMachine.setDriverStart(true);
             // Supplicant can't restart right away, so not the time we switched off
             mDisabledTimestamp = SystemClock.elapsedRealtime();
@@ -1213,7 +1215,11 @@ public class WifiController extends StateMachine {
                 case CMD_AIRPLANE_TOGGLED:
                     if (mSettingsStore.isAirplaneModeOn() &&
                             ! mSettingsStore.isWifiToggleEnabled()) {
-                        transitionTo(mApStaDisabledState);
+                        if (mStaAndApConcurrency) {
+                            transitionTo(mStaDisablingState);
+                        } else {
+                            transitionTo(mApStaDisabledState);
+                        }
                     }
                     break;
                 case CMD_SCAN_ALWAYS_MODE_CHANGED:
@@ -1454,6 +1460,9 @@ public class WifiController extends StateMachine {
                 } else if (mSettingsStore.isScanAlwaysAvailable()) {
                     transitionTo(mStaDisabledWithScanState);
                 } else {
+                    // For STA + SAP concurrency, supplicant already stopped
+                    // in EcmState.enter(), hence no need to transition to
+                    // mStaDisablingState.
                     transitionTo(mApStaDisabledState);
                 }
             }
